@@ -1,7 +1,6 @@
 package go_ssh
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"strings"
@@ -10,59 +9,76 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-func (h *Host) connect() error {
+type sshServer struct {
+	username  string
+	password  string
+	ipaddr    string
+	port      string
+	sshClient *ssh.Client
+}
+
+type SSHExecutor interface {
+	Cmd(cmd string) error
+	CmdGet(cmd string) (string, error)
+}
+
+func newSSHServer(username, password, ipaddr, port string) *sshServer {
+	return &sshServer{username: username, password: password, ipaddr: ipaddr, port: port}
+}
+
+func NewSSHExecutor(username, password, ipaddr, port string) SSHExecutor {
+	return newSSHServer(username, password, ipaddr, port)
+}
+
+func (s *sshServer) connect() error {
 	config := &ssh.ClientConfig{
-		User: h.Username,
+		User: s.username,
 		Auth: []ssh.AuthMethod{
-			ssh.Password(h.Password),
+			ssh.Password(s.password),
 		},
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 		Timeout:         10 * time.Second,
 	}
-	if client, err := ssh.Dial("tcp", fmt.Sprintf("%s:%s", h.IpAddr, h.Port), config); err != nil {
-		return errors.New(fmt.Sprintf("connect to %s:%s failed, %s", h.IpAddr, h.Port, err.Error()))
+	if client, err := ssh.Dial("tcp", fmt.Sprintf("%s:%s", s.ipaddr, s.port), config); err != nil {
+		return errors.New(fmt.Sprintf("connect to %s:%s failed, %s", s.ipaddr, s.port, err.Error()))
 	} else {
-		h.SSHClient = client
+		s.sshClient = client
 	}
 	return nil
 }
 
-func (h *Host) openSession() (*ssh.Session, error) {
-	if err := h.connect(); err != nil {
+func (s *sshServer) openSession() (*ssh.Session, error) {
+	if err := s.connect(); err != nil {
 		return nil, err
 	}
-	if session, err := h.SSHClient.NewSession(); err != nil {
+	if session, err := s.sshClient.NewSession(); err != nil {
 		return nil, errors.New(fmt.Sprintf("open session failed, %s", err.Error()))
 	} else {
 		return session, nil
 	}
 }
 
-func (h *Host) Cmd(cmd string) error {
-	session, err := h.openSession()
+func (s *sshServer) Cmd(cmd string) error {
+	session, err := s.openSession()
 	if err != nil {
 		return err
 	}
-	defer h.SSHClient.Close()
+	defer s.sshClient.Close()
 	if err := session.Run(cmd); err != nil {
 		return errors.New(fmt.Sprintf("run %s failed, %s", cmd, err.Error()))
 	}
 	return nil
 }
 
-func (h *Host) CmdGet(cmd string) (string, error) {
-	session, err := h.openSession()
+func (s *sshServer) CmdGet(cmd string) (string, error) {
+	session, err := s.openSession()
 	if err != nil {
 		return "", err
 	}
-	defer h.SSHClient.Close()
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	session.Stderr = &stderr
-	session.Stdout = &stdout
-	if err := session.Run(cmd); err != nil {
-		return strings.Trim(stderr.String(), "\n"), errors.New(fmt.Sprintf("run %s failed, %s", cmd, err.Error()))
+	defer s.sshClient.Close()
+	if output, err := session.CombinedOutput(cmd); err != nil {
+		return strings.Trim(string(output), "\n"), errors.New(fmt.Sprintf("run %s failed, %s", cmd, err.Error()))
 	} else {
-		return strings.Trim(stdout.String(), "\n"), nil
+		return strings.Trim(string(output), "\n"), nil
 	}
 }

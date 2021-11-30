@@ -2,16 +2,16 @@
 
 ## run cmd
 ```
-host := NewHost(username, password, ipaddr, port)
-if err := host.Cmd(cmd); err != nil {
+sh := NewSSHExecutor(username, password, ipaddr, port)
+if err := sh.Cmd(cmd); err != nil {
     fmt.Println(err)
 }
 ```
 
 ## run cmd with return
 ```
-host := NewHost(username, password, ipaddr, port)
-rtn, err := host.CmdGet(cmd)
+sh := NewSSHExecutor(username, password, ipaddr, port)
+rtn, err := sh.CmdGet(cmd)
 fmt.Print(rtn, err)
 }
 ```
@@ -20,8 +20,8 @@ fmt.Print(rtn, err)
 ```
 file1 := FilePut{LocalFile: "/path/to/file1", RemoteDir: "/path/to/dir"}
 file2 := FilePut{LocalFile: "/path/to/file2", RemoteDir: "/path/to/dir"}
-host := NewHost(username, password, ipaddr, port)
-if err := host.Put([]FilePut{file1, file2}); err != nil {
+sf := NewSFTPExecutor(username, password, ipaddr, port)
+if err := sf.Put([]FilePut{file1, file2}); err != nil {
     fmt.Println(err)
 }
 ```
@@ -30,8 +30,26 @@ if err := host.Put([]FilePut{file1, file2}); err != nil {
 ```
 file1 := FileGet{LocalDir: "/path/to/dir", RemoteFile: "/path/to/file1"}
 file2 := FileGet{LocalDir: "/path/to/dir", RemoteFile: "/path/to/file2"}
-host := NewHost(username, password, ipaddr, port)
-if err := host.Get([]FileGet{file1, file2}); err != nil {
+sf := NewSFTPExecutor(username, password, ipaddr, port)
+if err := sf.Get([]FileGet{file1, file2}); err != nil {
     fmt.Println(err)
 }
+```
+
+## Interactive Shell
+```
+shell := NewInteractiveShell(username, password, ipaddr, port)
+_ = shell.InvokeShell(120, 120)
+defer shell.ChanClose()
+ch := make(chan string)
+go shell.ChanRcv(ch)
+go func(ch chan string) {
+	for s := range ch {
+		fmt.Print(s)
+	}
+}(ch)
+time.Sleep(100 * time.Millisecond)
+shell.ChanSend("ls /")
+shell.ChanSend("exit")
+time.Sleep(10 * time.Second)
 ```
