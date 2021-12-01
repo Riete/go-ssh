@@ -132,15 +132,19 @@ func (i iShell) ChanSend(cmd string) error {
 }
 
 func (i iShell) ChanRcv(ch chan string) {
+	defer close(ch)
 	br := bufio.NewReader(i.ch)
 	for {
-		r, _, err := br.ReadRune()
+		p := make([]byte, 4096)
+		_, err := br.Read(p)
 		if err != nil {
-			close(ch)
+			if err != io.EOF {
+				ch <- err.Error()
+			}
 			break
 		}
-		ch <- string(r)
-		time.Sleep(100 * time.Microsecond)
+		ch <- string(p)
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 
