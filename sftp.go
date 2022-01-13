@@ -18,6 +18,7 @@ type FileGet struct {
 type FilePut struct {
 	LocalFile string
 	RemoteDir string
+	Src       io.Reader
 }
 
 type sftpServer struct {
@@ -26,28 +27,38 @@ type sftpServer struct {
 }
 
 type SFTPExecutor interface {
-	Get(files []FileGet) error
-	Put(files []FilePut) error
+	Get(file FileGet) error
+	Put(file FilePut) error
+	BatchGet(files []FileGet) error
+	BatchPut(files []FilePut) error
 }
 
 func NewSFTPExecutor(username, password, ipaddr, port string) SFTPExecutor {
 	return &sftpServer{sshServer: newSSHServer(username, password, ipaddr, port)}
 }
 
-func (sf *sftpServer) Put(files []FilePut) error {
+func (sf *sftpServer) Get(file FileGet) error {
+	return sf.BatchGet([]FileGet{file})
+}
+
+func (sf *sftpServer) Put(file FilePut) error {
+	return sf.BatchPut([]FilePut{file})
+}
+
+func (sf *sftpServer) BatchPut(files []FilePut) error {
 	if err := sf.openSftp(); err != nil {
 		return err
 	}
 	defer sf.sshClient.Close()
 	for _, v := range files {
-		if err := sf.put(v.LocalFile, v.RemoteDir); err != nil {
+		if err := sf.put(v.LocalFile, v.Src, v.RemoteDir); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (sf *sftpServer) Get(files []FileGet) error {
+func (sf *sftpServer) BatchGet(files []FileGet) error {
 	if err := sf.openSftp(); err != nil {
 		return err
 	}
@@ -72,10 +83,12 @@ func (sf *sftpServer) openSftp() error {
 	return nil
 }
 
-func (sf *sftpServer) put(local, remote string) error {
-	localFile, err := os.Open(local)
-	if err != nil {
-		return errors.New(fmt.Sprintf("Open local file %s failed: %s", local, err.Error()))
+func (sf *sftpServer) put(local string, src io.Reader, remote string) error {
+	if src == nil {
+		var err error
+		if src, err = os.Open(local); err != nil {
+			return errors.New(fmt.Sprintf("Open local file %s failed: %s", local, err.Error()))
+		}
 	}
 	filename := path.Base(local)
 	remotePath := path.Join(remote, filename)
@@ -83,7 +96,7 @@ func (sf *sftpServer) put(local, remote string) error {
 	if err != nil {
 		return errors.New(fmt.Sprintf("[%s]: Create remote file %s failed: %s", sf.ipaddr, remotePath, err.Error()))
 	}
-	_, err = io.Copy(remoteFile, localFile)
+	_, err = io.Copy(remoteFile, src)
 	if err != nil {
 		return errors.New(fmt.Sprintf("[%s]: Upload file to %s failed: %s", sf.ipaddr, remotePath, err.Error()))
 	}
