@@ -57,10 +57,9 @@ func (i *iShell) openChan() error {
 
 func (i iShell) setPty(high, weigh int) error {
 	modes := ssh.TerminalModes{
-		ssh.ECHO:          1,
+		ssh.ECHO:          0,
 		ssh.TTY_OP_ISPEED: 14400,
 		ssh.TTY_OP_OSPEED: 14400,
-		ssh.VSTATUS:       1,
 	}
 	var tm []byte
 	for k, v := range modes {
@@ -136,14 +135,14 @@ func (i iShell) ChanRcv(ch chan string) {
 	br := bufio.NewReader(i.ch)
 	for {
 		p := make([]byte, 4096)
-		_, err := br.Read(p)
-		if err != nil {
+		if count, err := br.Read(p); err != nil {
 			if err != io.EOF {
 				ch <- err.Error()
 			}
 			break
+		} else {
+			ch <- string(p[0:count])
 		}
-		ch <- string(p)
 		time.Sleep(10 * time.Millisecond)
 	}
 }
