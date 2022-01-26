@@ -57,7 +57,7 @@ func (i *iShell) openChan() error {
 
 func (i iShell) setPty(high, weigh int) error {
 	modes := ssh.TerminalModes{
-		ssh.ECHO:          0,
+		ssh.ECHO:          1,
 		ssh.TTY_OP_ISPEED: 14400,
 		ssh.TTY_OP_OSPEED: 14400,
 	}
