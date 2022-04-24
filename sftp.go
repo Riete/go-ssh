@@ -31,6 +31,7 @@ type SFTPExecutor interface {
 	Put(file FilePut) error
 	BatchGet(files []FileGet) error
 	BatchPut(files []FilePut) error
+	RawClient() *sftp.Client
 }
 
 func NewSFTPExecutor(username, password, ipaddr, port string) SFTPExecutor {
@@ -120,4 +121,8 @@ func (sf *sftpServer) get(local, remote string) error {
 		return errors.New(fmt.Sprintf("[%s]: Download file to %s failed: %s", sf.ipaddr, localPath, err.Error()))
 	}
 	return nil
+}
+
+func (sf *sftpServer) RawClient() *sftp.Client {
+	return sf.sftpClient
 }
