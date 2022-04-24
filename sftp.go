@@ -18,7 +18,7 @@ type FileGet struct {
 type FilePut struct {
 	LocalFile string
 	RemoteDir string
-	Src       io.Reader
+	Src       io.ReadCloser
 }
 
 type sftpServer struct {
@@ -84,19 +84,21 @@ func (sf *sftpServer) openSftp() error {
 	return nil
 }
 
-func (sf *sftpServer) put(local string, src io.Reader, remote string) error {
+func (sf *sftpServer) put(local string, src io.ReadCloser, remote string) error {
 	if src == nil {
 		var err error
 		if src, err = os.Open(local); err != nil {
 			return errors.New(fmt.Sprintf("Open local file %s failed: %s", local, err.Error()))
 		}
 	}
+	defer src.Close()
 	filename := path.Base(local)
 	remotePath := path.Join(remote, filename)
 	remoteFile, err := sf.sftpClient.Create(remotePath)
 	if err != nil {
 		return errors.New(fmt.Sprintf("[%s]: Create remote file %s failed: %s", sf.ipaddr, remotePath, err.Error()))
 	}
+	defer remoteFile.Close()
 	_, err = io.Copy(remoteFile, src)
 	if err != nil {
 		return errors.New(fmt.Sprintf("[%s]: Upload file to %s failed: %s", sf.ipaddr, remotePath, err.Error()))
@@ -111,11 +113,12 @@ func (sf *sftpServer) get(local, remote string) error {
 	if err != nil {
 		return errors.New(fmt.Sprintf("Open remote file %s failed: %s", remote, err.Error()))
 	}
-
+	defer remoteFile.Close()
 	localFile, err := os.Create(localPath)
 	if err != nil {
 		return errors.New(fmt.Sprintf("Create local file %s failed: %s", localPath, err.Error()))
 	}
+	defer localFile.Close()
 	_, err = io.Copy(localFile, remoteFile)
 	if err != nil {
 		return errors.New(fmt.Sprintf("[%s]: Download file to %s failed: %s", sf.ipaddr, localPath, err.Error()))
