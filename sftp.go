@@ -32,6 +32,7 @@ type SFTPExecutor interface {
 	BatchGet(files []FileGet) error
 	BatchPut(files []FilePut) error
 	RawClient() (*sftp.Client, error)
+	Close() error
 }
 
 func NewSFTPExecutor(username, password, ipaddr, port string) SFTPExecutor {
@@ -50,7 +51,7 @@ func (sf *sftpServer) BatchPut(files []FilePut) error {
 	if err := sf.openSftp(); err != nil {
 		return err
 	}
-	defer sf.sshClient.Close()
+	defer sf.Close()
 	for _, v := range files {
 		if err := sf.put(v.LocalFile, v.Src, v.RemoteDir); err != nil {
 			return err
@@ -63,7 +64,7 @@ func (sf *sftpServer) BatchGet(files []FileGet) error {
 	if err := sf.openSftp(); err != nil {
 		return err
 	}
-	defer sf.sshClient.Close()
+	defer sf.Close()
 	for _, v := range files {
 		if err := sf.get(v.LocalDir, v.RemoteFile); err != nil {
 			return err
@@ -131,4 +132,8 @@ func (sf *sftpServer) RawClient() (*sftp.Client, error) {
 		return sf.sftpClient, err
 	}
 	return sf.sftpClient, nil
+}
+
+func (sf *sftpServer) Close() error {
+	return sf.sshClient.Close()
 }
