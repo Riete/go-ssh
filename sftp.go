@@ -31,7 +31,7 @@ type SFTPExecutor interface {
 	Put(file FilePut) error
 	BatchGet(files []FileGet) error
 	BatchPut(files []FilePut) error
-	RawClient() *sftp.Client
+	RawClient() (*sftp.Client, error)
 }
 
 func NewSFTPExecutor(username, password, ipaddr, port string) SFTPExecutor {
@@ -126,6 +126,9 @@ func (sf *sftpServer) get(local, remote string) error {
 	return nil
 }
 
-func (sf *sftpServer) RawClient() *sftp.Client {
-	return sf.sftpClient
+func (sf *sftpServer) RawClient() (*sftp.Client, error) {
+	if err := sf.openSftp(); err != nil {
+		return sf.sftpClient, err
+	}
+	return sf.sftpClient, nil
 }
