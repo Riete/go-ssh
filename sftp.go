@@ -5,21 +5,9 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path"
 
 	"github.com/pkg/sftp"
 )
-
-type FileGet struct {
-	LocalDir   string
-	RemoteFile string
-}
-
-type FilePut struct {
-	LocalFile string
-	RemoteDir string
-	Src       io.ReadCloser
-}
 
 type sftpServer struct {
 	*sshServer
@@ -27,113 +15,85 @@ type sftpServer struct {
 }
 
 type SFTPExecutor interface {
-	Get(file FileGet) error
-	Put(file FilePut) error
-	BatchGet(files []FileGet) error
-	BatchPut(files []FilePut) error
-	RawClient() (*sftp.Client, error)
-	Close() error
+	Get(remotePath string) (*sftp.File, error)
+	GetAndSave(remotePath string, writer io.WriteCloser) error
+	Put(reader io.ReadCloser, remotePath string) error
+	LsDir(remoteDir string) ([]os.FileInfo, error)
+	RawClient() *sftp.Client
+	Close()
+	Open() error
 }
 
 func NewSFTPExecutor(username, password, ipaddr, port string) SFTPExecutor {
 	return &sftpServer{sshServer: newSSHServer(username, password, ipaddr, port)}
 }
 
-func (sf *sftpServer) Get(file FileGet) error {
-	return sf.BatchGet([]FileGet{file})
+func (sf *sftpServer) Open() error {
+	return sf.openSftp()
 }
 
-func (sf *sftpServer) Put(file FilePut) error {
-	return sf.BatchPut([]FilePut{file})
+func (sf sftpServer) LsDir(remoteDir string) ([]os.FileInfo, error) {
+	return sf.sftpClient.ReadDir(remoteDir)
 }
 
-func (sf *sftpServer) BatchPut(files []FilePut) error {
-	if err := sf.openSftp(); err != nil {
+func (sf sftpServer) GetAndSave(remotePath string, writer io.WriteCloser) error {
+	defer writer.Close()
+	reader, err := sf.Get(remotePath)
+	if err != nil {
 		return err
 	}
-	defer sf.Close()
-	for _, v := range files {
-		if err := sf.put(v.LocalFile, v.Src, v.RemoteDir); err != nil {
-			return err
-		}
+	defer reader.Close()
+	if _, err := io.Copy(writer, reader); err != nil {
+		return errors.New(fmt.Sprintf("save local file failed: %s", err.Error()))
 	}
 	return nil
 }
 
-func (sf *sftpServer) BatchGet(files []FileGet) error {
-	if err := sf.openSftp(); err != nil {
-		return err
-	}
-	defer sf.Close()
-	for _, v := range files {
-		if err := sf.get(v.LocalDir, v.RemoteFile); err != nil {
-			return err
-		}
-	}
-	return nil
+func (sf *sftpServer) Get(remoteFile string) (*sftp.File, error) {
+	return sf.get(remoteFile)
+}
+
+func (sf *sftpServer) Put(reader io.ReadCloser, remotePath string) error {
+	return sf.put(reader, remotePath)
 }
 
 func (sf *sftpServer) openSftp() error {
-	if err := sf.connect(); err != nil {
+	var err error
+	if err = sf.connect(); err != nil {
 		return err
 	}
-	if sftpClient, err := sftp.NewClient(sf.sshClient); err != nil {
-		return errors.New(fmt.Sprintf("open sftp failed, %s", err.Error()))
-	} else {
-		sf.sftpClient = sftpClient
+	if sf.sftpClient, err = sftp.NewClient(sf.sshClient); err != nil {
+		return errors.New(fmt.Sprintf("open sftp failed: %s", err.Error()))
 	}
 	return nil
 }
 
-func (sf *sftpServer) put(local string, src io.ReadCloser, remote string) error {
-	if src == nil {
-		var err error
-		if src, err = os.Open(local); err != nil {
-			return errors.New(fmt.Sprintf("Open local file %s failed: %s", local, err.Error()))
-		}
-	}
-	defer src.Close()
-	filename := path.Base(local)
-	remotePath := path.Join(remote, filename)
-	remoteFile, err := sf.sftpClient.Create(remotePath)
+func (sf *sftpServer) put(reader io.ReadCloser, remotePath string) error {
+	defer reader.Close()
+	writer, err := sf.sftpClient.Create(remotePath)
 	if err != nil {
-		return errors.New(fmt.Sprintf("[%s]: Create remote file %s failed: %s", sf.ipaddr, remotePath, err.Error()))
+		return errors.New(fmt.Sprintf("create remote file failed: %s", err.Error()))
 	}
-	defer remoteFile.Close()
-	_, err = io.Copy(remoteFile, src)
-	if err != nil {
-		return errors.New(fmt.Sprintf("[%s]: Upload file to %s failed: %s", sf.ipaddr, remotePath, err.Error()))
+	defer writer.Close()
+	if _, err = io.Copy(writer, reader); err != nil {
+		return errors.New(fmt.Sprintf("save remote file failed: %s", err.Error()))
 	}
 	return nil
 }
 
-func (sf *sftpServer) get(local, remote string) error {
-	filename := path.Base(remote)
-	localPath := path.Join(local, filename)
-	remoteFile, err := sf.sftpClient.Open(remote)
+func (sf *sftpServer) get(remoteFile string) (*sftp.File, error) {
+	file, err := sf.sftpClient.Open(remoteFile)
 	if err != nil {
-		return errors.New(fmt.Sprintf("Open remote file %s failed: %s", remote, err.Error()))
+		return file, errors.New(fmt.Sprintf("open remote file failed: %s", err.Error()))
 	}
-	defer remoteFile.Close()
-	localFile, err := os.Create(localPath)
-	if err != nil {
-		return errors.New(fmt.Sprintf("Create local file %s failed: %s", localPath, err.Error()))
-	}
-	defer localFile.Close()
-	_, err = io.Copy(localFile, remoteFile)
-	if err != nil {
-		return errors.New(fmt.Sprintf("[%s]: Download file to %s failed: %s", sf.ipaddr, localPath, err.Error()))
-	}
-	return nil
+	return file, nil
 }
 
-func (sf *sftpServer) RawClient() (*sftp.Client, error) {
-	if err := sf.openSftp(); err != nil {
-		return sf.sftpClient, err
-	}
-	return sf.sftpClient, nil
+func (sf *sftpServer) RawClient() *sftp.Client {
+	return sf.sftpClient
 }
 
-func (sf *sftpServer) Close() error {
-	return sf.sshClient.Close()
+func (sf *sftpServer) Close() {
+	_ = sf.sftpClient.Close()
+	_ = sf.sshClient.Close()
 }

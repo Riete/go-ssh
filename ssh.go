@@ -31,6 +31,7 @@ func NewSSHExecutor(username, password, ipaddr, port string) SSHExecutor {
 }
 
 func (s *sshServer) connect() error {
+	var err error
 	config := &ssh.ClientConfig{
 		User: s.username,
 		Auth: []ssh.AuthMethod{
@@ -39,10 +40,8 @@ func (s *sshServer) connect() error {
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 		Timeout:         10 * time.Second,
 	}
-	if client, err := ssh.Dial("tcp", fmt.Sprintf("%s:%s", s.ipaddr, s.port), config); err != nil {
+	if s.sshClient, err = ssh.Dial("tcp", fmt.Sprintf("%s:%s", s.ipaddr, s.port), config); err != nil {
 		return errors.New(fmt.Sprintf("connect to %s:%s failed, %s", s.ipaddr, s.port, err.Error()))
-	} else {
-		s.sshClient = client
 	}
 	return nil
 }
