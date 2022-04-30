@@ -1,4 +1,4 @@
-module github.com/riete/go_ssh
+module github.com/riete/go-ssh
 
 go 1.17
 

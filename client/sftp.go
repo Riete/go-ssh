@@ -1,4 +1,4 @@
-package go_ssh
+package client
 
 import (
 	"errors"
