@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sync"
 	"time"
 
 	"golang.org/x/crypto/ssh"
@@ -28,7 +29,8 @@ type ptyWindowChangeMsg struct {
 
 type iShell struct {
 	*sshServer
-	ch ssh.Channel
+	ch   ssh.Channel
+	once sync.Once
 }
 
 type InteractiveShell interface {
@@ -36,7 +38,7 @@ type InteractiveShell interface {
 	ResizePty(high, weigh int) error
 	ChanSend(cmd string) error
 	ChanRcv(ch chan string)
-	ChanClose()
+	Close()
 }
 
 func NewInteractiveShell(username, password, ipaddr, port string) InteractiveShell {
@@ -55,7 +57,7 @@ func (i *iShell) openChan() error {
 	return nil
 }
 
-func (i iShell) setPty(high, weigh int) error {
+func (i *iShell) setPty(high, weigh int) error {
 	modes := ssh.TerminalModes{
 		ssh.ECHO:          1,
 		ssh.TTY_OP_ISPEED: 14400,
@@ -86,7 +88,7 @@ func (i iShell) setPty(high, weigh int) error {
 	return err
 }
 
-func (i iShell) openShell() error {
+func (i *iShell) openShell() error {
 	ok, err := i.ch.SendRequest("shell", true, nil)
 	if err == nil && !ok {
 		return errors.New("ssh: could not start shell")
@@ -111,7 +113,7 @@ func (i *iShell) InvokeShell(high, weigh int) error {
 	return i.invokeShell(high, weigh)
 }
 
-func (i iShell) ResizePty(high, weigh int) error {
+func (i *iShell) ResizePty(high, weigh int) error {
 	req := ptyWindowChangeMsg{
 		Columns: uint32(weigh),
 		Rows:    uint32(high),
@@ -122,15 +124,15 @@ func (i iShell) ResizePty(high, weigh int) error {
 	return err
 }
 
-func (i iShell) ChanSend(cmd string) error {
+func (i *iShell) ChanSend(cmd string) error {
 	_, err := i.ch.Write([]byte(cmd))
 	if err == io.EOF {
-		i.ChanClose()
+		i.Close()
 	}
 	return err
 }
 
-func (i iShell) ChanRcv(ch chan string) {
+func (i *iShell) ChanRcv(ch chan string) {
 	defer close(ch)
 	br := bufio.NewReader(i.ch)
 	for {
@@ -147,6 +149,9 @@ func (i iShell) ChanRcv(ch chan string) {
 	}
 }
 
-func (i *iShell) ChanClose() {
-	i.ch.Close()
+func (i *iShell) Close() {
+	i.once.Do(func() {
+		i.ch.Close()
+		i.sshClient.Close()
+	})
 }
