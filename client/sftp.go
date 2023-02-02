@@ -24,8 +24,8 @@ type SFTPExecutor interface {
 	Open() error
 }
 
-func NewSFTPExecutor(username, password, ipaddr, port, privateKeyPath string) SFTPExecutor {
-	return &sftpServer{sshServer: newSSHServer(username, password, ipaddr, port, privateKeyPath)}
+func NewSFTPExecutor(username, ipaddr, port string, methods ...AuthMethod) SFTPExecutor {
+	return &sftpServer{sshServer: newSSHServer(username, ipaddr, port, methods...)}
 }
 
 func (sf *sftpServer) Open() error {

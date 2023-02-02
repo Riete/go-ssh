@@ -3,7 +3,6 @@ package client
 import (
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -11,12 +10,11 @@ import (
 )
 
 type sshServer struct {
-	username       string
-	password       string
-	ipaddr         string
-	port           string
-	sshClient      *ssh.Client
-	privateKeyPath string
+	username    string
+	ipaddr      string
+	port        string
+	sshClient   *ssh.Client
+	authMethods []AuthMethod
 }
 
 type SSHExecutor interface {
@@ -24,29 +22,33 @@ type SSHExecutor interface {
 	CmdGet(cmd string) (string, error)
 }
 
-func newSSHServer(username, password, ipaddr, port, privateKeyPath string) *sshServer {
-	return &sshServer{username: username, password: password, ipaddr: ipaddr, port: port, privateKeyPath: privateKeyPath}
+func newSSHServer(username, ipaddr, port string, methods ...AuthMethod) *sshServer {
+	return &sshServer{
+		username:    username,
+		ipaddr:      ipaddr,
+		port:        port,
+		authMethods: methods,
+	}
 }
 
-func NewSSHExecutor(username, password, ipaddr, port, privateKeyPath string) SSHExecutor {
-	return newSSHServer(username, password, ipaddr, port, privateKeyPath)
+func NewSSHExecutor(username, ipaddr, port string, methods ...AuthMethod) SSHExecutor {
+	return newSSHServer(username, ipaddr, port, methods...)
 }
 
 func (s *sshServer) connect() error {
-	var err error
 	config := &ssh.ClientConfig{
-		User: s.username,
-		Auth: []ssh.AuthMethod{
-			ssh.Password(s.password),
-		},
+		User:            s.username,
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 		Timeout:         10 * time.Second,
 	}
-	if privateKeyData, err := os.ReadFile(s.privateKeyPath); err == nil {
-		if key, err := ssh.ParsePrivateKey(privateKeyData); err == nil {
-			config.Auth = append(config.Auth, ssh.PublicKeys(key))
+	for _, method := range s.authMethods {
+		if auth, err := method(); err != nil {
+			return err
+		} else {
+			config.Auth = append(config.Auth, auth)
 		}
 	}
+	var err error
 	if s.sshClient, err = ssh.Dial("tcp", fmt.Sprintf("%s:%s", s.ipaddr, s.port), config); err != nil {
 		return errors.New(fmt.Sprintf("connect to %s:%s failed, %s", s.ipaddr, s.port, err.Error()))
 	}
