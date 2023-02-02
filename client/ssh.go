@@ -3,6 +3,7 @@ package client
 import (
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -10,11 +11,12 @@ import (
 )
 
 type sshServer struct {
-	username  string
-	password  string
-	ipaddr    string
-	port      string
-	sshClient *ssh.Client
+	username       string
+	password       string
+	ipaddr         string
+	port           string
+	sshClient      *ssh.Client
+	privateKeyPath string
 }
 
 type SSHExecutor interface {
@@ -22,12 +24,12 @@ type SSHExecutor interface {
 	CmdGet(cmd string) (string, error)
 }
 
-func newSSHServer(username, password, ipaddr, port string) *sshServer {
-	return &sshServer{username: username, password: password, ipaddr: ipaddr, port: port}
+func newSSHServer(username, password, ipaddr, port, privateKeyPath string) *sshServer {
+	return &sshServer{username: username, password: password, ipaddr: ipaddr, port: port, privateKeyPath: privateKeyPath}
 }
 
-func NewSSHExecutor(username, password, ipaddr, port string) SSHExecutor {
-	return newSSHServer(username, password, ipaddr, port)
+func NewSSHExecutor(username, password, ipaddr, port, privateKeyPath string) SSHExecutor {
+	return newSSHServer(username, password, ipaddr, port, privateKeyPath)
 }
 
 func (s *sshServer) connect() error {
@@ -39,6 +41,11 @@ func (s *sshServer) connect() error {
 		},
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 		Timeout:         10 * time.Second,
+	}
+	if privateKeyData, err := os.ReadFile(s.privateKeyPath); err == nil {
+		if key, err := ssh.ParsePrivateKey(privateKeyData); err == nil {
+			config.Auth = append(config.Auth, ssh.PublicKeys(key))
+		}
 	}
 	if s.sshClient, err = ssh.Dial("tcp", fmt.Sprintf("%s:%s", s.ipaddr, s.port), config); err != nil {
 		return errors.New(fmt.Sprintf("connect to %s:%s failed, %s", s.ipaddr, s.port, err.Error()))

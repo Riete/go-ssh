@@ -41,8 +41,8 @@ type InteractiveShell interface {
 	Close()
 }
 
-func NewInteractiveShell(username, password, ipaddr, port string) InteractiveShell {
-	return &iShell{sshServer: newSSHServer(username, password, ipaddr, port)}
+func NewInteractiveShell(username, password, ipaddr, port, privateKeyPath string) InteractiveShell {
+	return &iShell{sshServer: newSSHServer(username, password, ipaddr, port, privateKeyPath)}
 }
 
 func (i *iShell) openChan() error {
