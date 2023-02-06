@@ -1,9 +1,8 @@
-package client
+package go_ssh
 
 import (
 	"bufio"
 	"errors"
-	"fmt"
 	"io"
 	"sync"
 	"time"
@@ -27,13 +26,15 @@ type ptyWindowChangeMsg struct {
 	Height  uint32
 }
 
-type iShell struct {
-	*sshServer
-	ch   ssh.Channel
-	once sync.Once
+type IShell struct {
+	server *Server
+	ch     ssh.Channel
+	once   sync.Once
+	client *ssh.Client
 }
 
 type InteractiveShell interface {
+	Connect(username string, timeout time.Duration, methods ...AuthMethod) error
 	InvokeShell(high, weigh int) error
 	ResizePty(high, weigh int) error
 	ChanSend(cmd string) error
@@ -41,23 +42,24 @@ type InteractiveShell interface {
 	Close()
 }
 
-func NewInteractiveShell(username, ipaddr, port string, methods ...AuthMethod) InteractiveShell {
-	return &iShell{sshServer: newSSHServer(username, ipaddr, port, methods...)}
-}
-
-func (i *iShell) openChan() error {
-	if err := i.connect(); err != nil {
-		return err
+func (i *IShell) Connect(username string, timeout time.Duration, methods ...AuthMethod) error {
+	var err error
+	if i.client, err = i.server.Connect(username, timeout, methods...); err != nil {
+		return errors.New("connect to server failed: " + err.Error())
 	}
-	ch, _, err := i.sshClient.OpenChannel("session", nil)
-	if err != nil {
-		return errors.New(fmt.Sprintf("open channel failed, %s", err.Error()))
-	}
-	i.ch = ch
 	return nil
 }
 
-func (i *iShell) setPty(high, weigh int) error {
+func (i *IShell) openChan() error {
+	if ch, _, err := i.client.OpenChannel("session", nil); err != nil {
+		return errors.New("open channel failed: " + err.Error())
+	} else {
+		i.ch = ch
+		return nil
+	}
+}
+
+func (i *IShell) setPty(high, weigh int) error {
 	modes := ssh.TerminalModes{
 		ssh.ECHO:          1,
 		ssh.TTY_OP_ISPEED: 14400,
@@ -88,7 +90,7 @@ func (i *iShell) setPty(high, weigh int) error {
 	return err
 }
 
-func (i *iShell) openShell() error {
+func (i *IShell) openShell() error {
 	ok, err := i.ch.SendRequest("shell", true, nil)
 	if err == nil && !ok {
 		return errors.New("ssh: could not start shell")
@@ -96,7 +98,7 @@ func (i *iShell) openShell() error {
 	return err
 }
 
-func (i *iShell) invokeShell(high, weigh int) error {
+func (i *IShell) invokeShell(high, weigh int) error {
 	if err := i.openChan(); err != nil {
 		return err
 	}
@@ -109,11 +111,11 @@ func (i *iShell) invokeShell(high, weigh int) error {
 	return nil
 }
 
-func (i *iShell) InvokeShell(high, weigh int) error {
+func (i *IShell) InvokeShell(high, weigh int) error {
 	return i.invokeShell(high, weigh)
 }
 
-func (i *iShell) ResizePty(high, weigh int) error {
+func (i *IShell) ResizePty(high, weigh int) error {
 	req := ptyWindowChangeMsg{
 		Columns: uint32(weigh),
 		Rows:    uint32(high),
@@ -124,7 +126,7 @@ func (i *iShell) ResizePty(high, weigh int) error {
 	return err
 }
 
-func (i *iShell) ChanSend(cmd string) error {
+func (i *IShell) ChanSend(cmd string) error {
 	_, err := i.ch.Write([]byte(cmd))
 	if err == io.EOF {
 		i.Close()
@@ -132,7 +134,7 @@ func (i *iShell) ChanSend(cmd string) error {
 	return err
 }
 
-func (i *iShell) ChanRcv(ch chan string) {
+func (i *IShell) ChanRcv(ch chan string) {
 	defer close(ch)
 	br := bufio.NewReader(i.ch)
 	for {
@@ -149,9 +151,13 @@ func (i *iShell) ChanRcv(ch chan string) {
 	}
 }
 
-func (i *iShell) Close() {
+func (i *IShell) Close() {
 	i.once.Do(func() {
-		i.ch.Close()
-		i.sshClient.Close()
+		_ = i.ch.Close()
+		_ = i.client.Close()
 	})
+}
+
+func NewInteractiveShell(server *Server) InteractiveShell {
+	return &IShell{server: server}
 }
