@@ -1,6 +1,6 @@
 module github.com/riete/go-ssh
 
-go 1.17
+go 1.20
 
 require (
 	github.com/pkg/sftp v1.10.0

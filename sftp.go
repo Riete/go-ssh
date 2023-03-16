@@ -29,7 +29,7 @@ type SftpExecutor interface {
 
 func (s *SftpClient) Connect(username string, timeout time.Duration, methods ...AuthMethod) error {
 	var err error
-	if s.client, err = s.server.Connect(username, timeout, methods...); err != nil {
+	if s.client, err = s.server.connect(username, timeout, methods...); err != nil {
 		return errors.New("connect to server failed: " + err.Error())
 	}
 	return s.openSftp()

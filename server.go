@@ -12,7 +12,7 @@ type Server struct {
 	port string
 }
 
-func (s Server) Connect(username string, timeout time.Duration, methods ...AuthMethod) (*ssh.Client, error) {
+func (s Server) connect(username string, timeout time.Duration, methods ...AuthMethod) (*ssh.Client, error) {
 	config := &ssh.ClientConfig{User: username, HostKeyCallback: ssh.InsecureIgnoreHostKey(), Timeout: timeout}
 	for _, method := range methods {
 		if auth, err := method(); err != nil {
@@ -22,6 +22,18 @@ func (s Server) Connect(username string, timeout time.Duration, methods ...AuthM
 		}
 	}
 	return ssh.Dial("tcp", fmt.Sprintf("%s:%s", s.ip, s.port), config)
+}
+
+func (s *Server) OpenSession() SessionExecutor {
+	return NewSessionExecutor(s)
+}
+
+func (s *Server) OpenSftp() SftpExecutor {
+	return NewSftpExecutor(s)
+}
+
+func (s *Server) OpenIShell() InteractiveShell {
+	return NewInteractiveShell(s)
 }
 
 func NewServer(ip, port string) *Server {

@@ -44,7 +44,7 @@ type InteractiveShell interface {
 
 func (i *IShell) Connect(username string, timeout time.Duration, methods ...AuthMethod) error {
 	var err error
-	if i.client, err = i.server.Connect(username, timeout, methods...); err != nil {
+	if i.client, err = i.server.connect(username, timeout, methods...); err != nil {
 		return errors.New("connect to server failed: " + err.Error())
 	}
 	return nil
