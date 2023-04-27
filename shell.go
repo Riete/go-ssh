@@ -2,6 +2,7 @@ package go_ssh
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"io"
 	"sync"
@@ -38,7 +39,7 @@ type InteractiveShell interface {
 	InvokeShell(high, weigh int) error
 	ResizePty(high, weigh int) error
 	ChanSend(cmd string) error
-	ChanRcv(ch chan string)
+	ChanRcv(ctx context.Context, ch chan string)
 	Close()
 }
 
@@ -134,20 +135,22 @@ func (i *IShell) ChanSend(cmd string) error {
 	return err
 }
 
-func (i *IShell) ChanRcv(ch chan string) {
+func (i *IShell) ChanRcv(ctx context.Context, ch chan string) {
 	defer close(ch)
 	br := bufio.NewReader(i.ch)
 	for {
-		p := make([]byte, 4096)
-		if count, err := br.Read(p); err != nil {
-			if err != io.EOF {
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(10 * time.Millisecond):
+			p := make([]byte, 4096)
+			count, err := br.Read(p)
+			if err != nil && err != io.EOF {
 				ch <- err.Error()
+				return
 			}
-			break
-		} else {
 			ch <- string(p[0:count])
 		}
-		time.Sleep(10 * time.Millisecond)
 	}
 }
 
