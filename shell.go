@@ -39,7 +39,7 @@ type InteractiveShell interface {
 	InvokeShell(high, weigh int) error
 	ResizePty(high, weigh int) error
 	ChanSend(cmd string) error
-	ChanRcv(ctx context.Context, ch chan string)
+	ChanRcv(ctx context.Context) chan string
 	Close()
 }
 
@@ -135,23 +135,27 @@ func (i *IShell) ChanSend(cmd string) error {
 	return err
 }
 
-func (i *IShell) ChanRcv(ctx context.Context, ch chan string) {
-	defer close(ch)
-	br := bufio.NewReader(i.ch)
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(10 * time.Millisecond):
-			p := make([]byte, 4096)
-			count, err := br.Read(p)
-			if err != nil && err != io.EOF {
-				ch <- err.Error()
+func (i *IShell) ChanRcv(ctx context.Context) chan string {
+	ch := make(chan string)
+	go func() {
+		defer close(ch)
+		br := bufio.NewReader(i.ch)
+		for {
+			select {
+			case <-ctx.Done():
 				return
+			case <-time.After(10 * time.Millisecond):
+				p := make([]byte, 4096)
+				count, err := br.Read(p)
+				if err != nil && err != io.EOF {
+					ch <- err.Error()
+					return
+				}
+				ch <- string(p[0:count])
 			}
-			ch <- string(p[0:count])
 		}
-	}
+	}()
+	return ch
 }
 
 func (i *IShell) Close() {
