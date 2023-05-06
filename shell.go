@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"sync"
 	"time"
@@ -131,6 +132,7 @@ func (i *IShell) ChanSend(cmd string) error {
 	_, err := i.ch.Write([]byte(cmd))
 	if err == io.EOF {
 		i.Close()
+		return fmt.Errorf("%s: session closed", err.Error())
 	}
 	return err
 }
@@ -147,11 +149,14 @@ func (i *IShell) ChanRcv(ctx context.Context) chan string {
 			case <-time.After(10 * time.Millisecond):
 				p := make([]byte, 4096)
 				count, err := br.Read(p)
-				if err != nil && err != io.EOF {
+				ch <- string(p[0:count])
+				if err == io.EOF {
+					return
+				}
+				if err != nil {
 					ch <- err.Error()
 					return
 				}
-				ch <- string(p[0:count])
 			}
 		}
 	}()
