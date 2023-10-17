@@ -4,7 +4,6 @@ import (
 	"context"
 	"io"
 	"net"
-	"sync"
 
 	"golang.org/x/crypto/ssh"
 )
@@ -38,18 +37,19 @@ func (p portForward) dailLocal(host, port string) (net.Conn, error) {
 }
 
 func (p portForward) forward(local, remote net.Conn) error {
-	wg := &sync.WaitGroup{}
-	wg.Add(2)
+	defer local.Close()
+	defer remote.Close()
 	var err error
 	go func() {
-		defer wg.Done()
-		_, err = io.Copy(local, remote)
+		if _, err1 := io.Copy(local, remote); err1 != nil {
+			err = err1
+		}
 	}()
-	go func() {
-		defer wg.Done()
-		_, err = io.Copy(remote, local)
-	}()
-	return err
+	_, err2 := io.Copy(remote, local)
+	if err != nil {
+		return err
+	}
+	return err2
 }
 
 type LocalToRemote struct {
@@ -70,43 +70,33 @@ func (l LocalToRemote) DailRemote() (net.Conn, error) {
 
 // PortForward  local host:port -> remote host:port
 func (l LocalToRemote) PortForward(ctx context.Context) error {
-	var localListener net.Listener
-	var remote net.Conn
-	var local net.Conn
-	var err error
-
-	defer func() {
-		if remote != nil {
-			_ = remote.Close()
-		}
-		if local != nil {
-			_ = local.Close()
-		}
-		if localListener != nil {
-			_ = localListener.Close()
-		}
-	}()
-
-	localListener, err = l.ListenLocal()
+	ch := make(chan error)
+	localListener, err := l.ListenLocal()
 	if err != nil {
 		return err
 	}
-	remote, err = l.DailRemote()
-	if err != nil {
-		return err
-	}
+	defer localListener.Close()
+
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
+		case err := <-ch:
+			return err
 		default:
-			local, err = localListener.Accept()
+			local, err := localListener.Accept()
 			if err != nil {
 				return err
 			}
-			if err = l.f.forward(local, remote); err != nil {
-				return err
-			}
+			go func() {
+				remote, err := l.DailRemote()
+				if err != nil {
+					ch <- err
+				}
+				if err := l.f.forward(local, remote); err != nil {
+					ch <- err
+				}
+			}()
 		}
 	}
 }
@@ -139,43 +129,33 @@ func (r RemoteToLocal) DailLocal() (net.Conn, error) {
 
 // PortForward  remote host:port -> local host:port
 func (r RemoteToLocal) PortForward(ctx context.Context) error {
-	var remoteListener net.Listener
-	var remote net.Conn
-	var local net.Conn
-	var err error
-
-	defer func() {
-		if remote != nil {
-			_ = remote.Close()
-		}
-		if local != nil {
-			_ = local.Close()
-		}
-		if remoteListener != nil {
-			_ = remoteListener.Close()
-		}
-	}()
-
-	remoteListener, err = r.ListenRemote()
+	ch := make(chan error)
+	remoteListener, err := r.ListenRemote()
 	if err != nil {
 		return err
 	}
-	local, err = r.DailLocal()
-	if err != nil {
-		return err
-	}
+	defer remoteListener.Close()
+
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
+		case err := <-ch:
+			return err
 		default:
-			remote, err = remoteListener.Accept()
+			remote, err := remoteListener.Accept()
 			if err != nil {
 				return err
 			}
-			if err = r.f.forward(local, remote); err != nil {
-				return err
-			}
+			go func() {
+				local, err := r.DailLocal()
+				if err != nil {
+					ch <- err
+				}
+				if err := r.f.forward(local, remote); err != nil {
+					ch <- err
+				}
+			}()
 		}
 	}
 }
