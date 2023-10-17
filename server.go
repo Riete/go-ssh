@@ -36,6 +36,10 @@ func (s *Server) OpenIShell() InteractiveShell {
 	return NewInteractiveShell(s)
 }
 
+func (s *Server) OpenClient(username string, timeout time.Duration, methods ...AuthMethod) (*ssh.Client, error) {
+	return s.connect(username, timeout, methods...)
+}
+
 func NewServer(ip, port string) *Server {
 	return &Server{ip: ip, port: port}
 }
