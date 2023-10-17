@@ -75,6 +75,18 @@ func (l LocalToRemote) PortForward(ctx context.Context) error {
 	var local net.Conn
 	var err error
 
+	defer func() {
+		if remote != nil {
+			_ = remote.Close()
+		}
+		if local != nil {
+			_ = local.Close()
+		}
+		if localListener != nil {
+			_ = localListener.Close()
+		}
+	}()
+
 	localListener, err = l.ListenLocal()
 	if err != nil {
 		return err
@@ -131,6 +143,18 @@ func (r RemoteToLocal) PortForward(ctx context.Context) error {
 	var remote net.Conn
 	var local net.Conn
 	var err error
+
+	defer func() {
+		if remote != nil {
+			_ = remote.Close()
+		}
+		if local != nil {
+			_ = local.Close()
+		}
+		if remoteListener != nil {
+			_ = remoteListener.Close()
+		}
+	}()
 
 	remoteListener, err = r.ListenRemote()
 	if err != nil {
