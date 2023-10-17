@@ -1,15 +1,17 @@
 module github.com/riete/go-ssh
 
-go 1.20
+go 1.21.2
 
 require (
+	github.com/cloudfoundry/go-socks5 v0.0.0-20180221174514-54f73bdb8a8e
 	github.com/pkg/sftp v1.10.0
-	golang.org/x/crypto v0.0.0-20211117183948-ae814b36b871
+	golang.org/x/crypto v0.14.0
 )
 
 require (
 	github.com/kr/fs v0.1.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/stretchr/testify v1.7.0 // indirect
-	golang.org/x/sys v0.0.0-20210615035016-665e8c7367d1 // indirect
+	golang.org/x/net v0.17.0 // indirect
+	golang.org/x/sys v0.13.0 // indirect
 )
