@@ -21,7 +21,7 @@ func (p portForward) listenLocal(host, port string) (net.Listener, error) {
 	return net.Listen("tcp", host+":"+port)
 }
 
-// dailRemote dail to remote peer's host:port
+// dailRemote let remote peer dail host:port
 func (p portForward) dailRemote(host, port string) (net.Conn, error) {
 	return p.client.Dial("tcp", host+":"+port)
 }
