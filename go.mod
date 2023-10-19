@@ -3,7 +3,7 @@ module github.com/riete/go-ssh
 go 1.21.2
 
 require (
-	github.com/cloudfoundry/go-socks5 v0.0.0-20180221174514-54f73bdb8a8e
+	github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5
 	github.com/pkg/sftp v1.10.0
 	golang.org/x/crypto v0.14.0
 )

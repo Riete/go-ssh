@@ -3,11 +3,10 @@ package go_ssh
 import (
 	"context"
 	"fmt"
-	"log"
 	"net"
 	"time"
 
-	"github.com/cloudfoundry/go-socks5"
+	"github.com/armon/go-socks5"
 
 	"golang.org/x/crypto/ssh"
 )
@@ -15,17 +14,13 @@ import (
 type Socks5Proxy struct {
 	client *ssh.Client
 	port   string
-	logger *log.Logger
 }
 
 func (s Socks5Proxy) keepalive() {
 	t := time.NewTicker(10 * time.Second)
 	for {
 		<-t.C
-		_, _, err := s.client.SendRequest("keepalive", true, nil)
-		if err != nil {
-			s.logger.Println("error sending ssh keepalive: " + err.Error())
-		}
+		s.client.SendRequest("keepalive", true, nil)
 	}
 }
 
@@ -35,7 +30,6 @@ func (s Socks5Proxy) Start() error {
 		Dial: func(ctx context.Context, network, addr string) (net.Conn, error) {
 			return s.client.Dial(network, addr)
 		},
-		Logger: s.logger,
 	}
 	server, err := socks5.New(conf)
 	if err != nil {
@@ -44,9 +38,6 @@ func (s Socks5Proxy) Start() error {
 	return server.ListenAndServe("tcp", "127.0.0.1:"+s.port)
 }
 
-func NewSocks5Proxy(client *ssh.Client, port string, logger *log.Logger) *Socks5Proxy {
-	if logger == nil {
-		logger = log.Default()
-	}
-	return &Socks5Proxy{client: client, port: port, logger: logger}
+func NewSocks5Proxy(client *ssh.Client, port string) *Socks5Proxy {
+	return &Socks5Proxy{client: client, port: port}
 }
