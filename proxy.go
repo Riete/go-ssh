@@ -24,7 +24,7 @@ func (s Socks5Proxy) keepalive() {
 	}
 }
 
-func (s Socks5Proxy) Start() error {
+func (s Socks5Proxy) ListenAndServe() error {
 	go s.keepalive()
 	conf := &socks5.Config{
 		Dial: func(ctx context.Context, network, addr string) (net.Conn, error) {
