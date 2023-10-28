@@ -1,6 +1,6 @@
 module github.com/riete/go-ssh
 
-go 1.21.2
+go 1.21
 
 require (
 	github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5
