@@ -9,7 +9,8 @@ import (
 )
 
 type PortForwarder interface {
-	PortForward(context.Context) error
+	PortForward() error
+	PortForwardContext(context.Context) error
 }
 
 type portForward struct {
@@ -69,7 +70,11 @@ func (l LocalToRemote) DailRemote() (net.Conn, error) {
 }
 
 // PortForward  local host:port -> remote host:port
-func (l LocalToRemote) PortForward(ctx context.Context) error {
+func (l LocalToRemote) PortForward() error {
+	return l.PortForwardContext(context.Background())
+}
+
+func (l LocalToRemote) PortForwardContext(ctx context.Context) error {
 	ch := make(chan error)
 	localListener, err := l.ListenLocal()
 	if err != nil {
@@ -128,7 +133,11 @@ func (r RemoteToLocal) DailLocal() (net.Conn, error) {
 }
 
 // PortForward  remote host:port -> local host:port
-func (r RemoteToLocal) PortForward(ctx context.Context) error {
+func (r RemoteToLocal) PortForward() error {
+	return r.PortForwardContext(context.Background())
+}
+
+func (r RemoteToLocal) PortForwardContext(ctx context.Context) error {
 	ch := make(chan error)
 	remoteListener, err := r.ListenRemote()
 	if err != nil {
