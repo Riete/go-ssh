@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"net"
+	"sync"
 
 	"golang.org/x/crypto/ssh"
 )
@@ -37,18 +38,31 @@ func (p portForward) dailLocal(host, port string) (net.Conn, error) {
 	return net.Dial("tcp", host+":"+port)
 }
 
-func (p portForward) forward(local, remote net.Conn) error {
-	defer local.Close()
-	defer remote.Close()
-	var err error
+func (p portForward) forward(src, dst io.ReadWriteCloser) error {
+	var wg sync.WaitGroup
+	var o sync.Once
+	var err1 error
+	var err2 error
+	closeReader := func() {
+		_ = src.Close()
+		_ = dst.Close()
+	}
+
+	wg.Add(2)
 	go func() {
-		if _, err1 := io.Copy(local, remote); err1 != nil {
-			err = err1
-		}
+		_, err1 = io.Copy(src, dst)
+		o.Do(closeReader)
+		wg.Done()
 	}()
-	_, err2 := io.Copy(remote, local)
-	if err != nil {
-		return err
+
+	go func() {
+		_, err2 = io.Copy(dst, src)
+		o.Do(closeReader)
+		wg.Done()
+	}()
+	wg.Wait()
+	if err1 != nil {
+		return err1
 	}
 	return err2
 }
