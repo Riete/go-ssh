@@ -1,4 +1,4 @@
-package go_ssh
+package ssh
 
 import (
 	"fmt"
