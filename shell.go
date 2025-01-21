@@ -40,7 +40,7 @@ type InteractiveShell interface {
 	InvokeShell(high, weigh int) error
 	ResizePty(high, weigh int) error
 	ChanSend(cmd string) error
-	ChanRcv(ctx context.Context) chan string
+	ChanRecv(ctx context.Context) chan string
 	Close()
 }
 
@@ -137,7 +137,7 @@ func (i *IShell) ChanSend(cmd string) error {
 	return err
 }
 
-func (i *IShell) ChanRcv(ctx context.Context) chan string {
+func (i *IShell) ChanRecv(ctx context.Context) chan string {
 	ch := make(chan string)
 	go func() {
 		defer close(ch)
